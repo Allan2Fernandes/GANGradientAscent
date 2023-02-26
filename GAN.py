@@ -1,8 +1,8 @@
 import tensorflow as tf
-from keras.layers import Input, Conv2D, BatchNormalization, Reshape, Dense, LeakyReLU, Flatten, Conv2DTranspose
-from keras.optimizers import Adam
+from keras.layers import Input, Conv2D, BatchNormalization, Reshape, Dense, LeakyReLU, Flatten, Conv2DTranspose, Lambda, UpSampling2D, Activation
+from keras.activations import selu
 import matplotlib.pyplot as plt
-from keras.applications import MobileNetV3Large
+
 import time
 
 
@@ -14,38 +14,145 @@ class GAN:
         pass
 
     def build_generator(self):
-        filters = 128
-        kernel_size = (4, 4)
+        filters = 64
+        kernel_size = (3, 3)
         padding = 'same'
         kernel_initializer = 'he_normal'
 
         self.generator = tf.keras.models.Sequential([
-            Dense(units=(self.image_dim * self.image_dim * 3), input_shape=[self.noise_dimensions]),
-            Reshape(target_shape=(self.image_dim, self.image_dim, 3)),
+            Dense(units=(self.image_dim * self.image_dim * 3*2*2), input_shape=[self.noise_dimensions]),
+            Reshape(target_shape=(self.image_dim*2, self.image_dim*2, 3)),
             # Downsample it to the bottleneck
-            Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer='he_normal'),
+            Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer=kernel_initializer),
             BatchNormalization(),
             LeakyReLU(),
-            Conv2D(filters=filters * 2, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer='he_normal'),
+            Conv2D(filters=filters * 2, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer=kernel_initializer),
             BatchNormalization(),
             LeakyReLU(),
-            Conv2D(filters=filters * 4, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer='he_normal'),
+            Conv2D(filters=filters * 4, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer=kernel_initializer),
+            BatchNormalization(),
+            LeakyReLU(),
+
+            Conv2D(filters=filters * 8, kernel_size=kernel_size, strides=2, padding=padding, use_bias=False,kernel_initializer=kernel_initializer),
             BatchNormalization(),
             LeakyReLU(),
 
             # Bottleneck layer
-            Conv2D(filters=filters * 8, kernel_size=kernel_size, strides=2, padding=padding,kernel_initializer='he_normal', use_bias=False),
+            Conv2D(filters=filters * 16, kernel_size=kernel_size, strides=2, padding=padding,kernel_initializer='he_normal', use_bias=False),
             BatchNormalization(),
             LeakyReLU(),
 
             # Upsample it to the input shape
-            Conv2DTranspose(filters=filters * 4, activation='selu', strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
+            Conv2DTranspose(filters=filters * 4, strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
             BatchNormalization(),
-            Conv2DTranspose(filters=filters * 2, activation='selu', strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
+            tf.keras.layers.Activation('selu'),
+            Conv2DTranspose(filters=filters * 4, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
             BatchNormalization(),
-            Conv2DTranspose(filters=filters, activation='selu', strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
+            tf.keras.layers.Activation('selu'),
+            Conv2DTranspose(filters=filters * 2, strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
             BatchNormalization(),
+            tf.keras.layers.Activation('selu'),
+            Conv2DTranspose(filters=filters * 2, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            tf.keras.layers.Activation('selu'),
+            Conv2DTranspose(filters=filters, strides=2, kernel_size=kernel_size, padding=padding,use_bias=False),
+            BatchNormalization(),
+            tf.keras.layers.Activation('selu'),
+            Conv2DTranspose(filters=filters, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            tf.keras.layers.Activation('selu'),
             Conv2DTranspose(filters=3, activation='tanh', strides=2, kernel_size=kernel_size,padding=padding, use_bias=False)
+        ])
+
+        # scaled_image_dim = self.image_dim // 64 #Needs to be scaled up 4 times
+        #
+        #
+        # self.generator = tf.keras.models.Sequential([
+        #     Dense(units=(scaled_image_dim * scaled_image_dim * filters), input_shape=[self.noise_dimensions]),
+        #     BatchNormalization(),
+        #     LeakyReLU(),
+        #     Reshape(target_shape=(scaled_image_dim, scaled_image_dim, filters)),
+        #     Conv2DTranspose(filters=filters//2, strides=1, kernel_size=kernel_size, padding=padding,use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 2, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters//4,  strides=1, kernel_size=kernel_size,padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 4, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters//8, strides=1, kernel_size=kernel_size,padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 8, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters//16, strides=1, kernel_size=kernel_size,padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 16, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 32, strides=1, kernel_size=kernel_size,padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 32, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 64,strides=1, kernel_size=kernel_size,padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters=filters // 64, strides=2, kernel_size=kernel_size, padding=padding, use_bias=False),
+        #     BatchNormalization(),
+        #     tf.keras.layers.Activation('selu'),
+        #     Conv2DTranspose(filters = 3, activation='tanh', strides=1, kernel_size=kernel_size, padding=padding, use_bias=False)
+        # ])
+
+        self.generator.summary()
+        pass
+
+    def build_generatorv2(self):
+        filters = 2048
+        kernel_size = (3, 3)
+        padding = 'same'
+        kernel_initializer = 'he_normal'
+        scaled_image_dim = self.image_dim // 64  # Needs to be scaled up 4 times
+
+
+
+        self.generator = tf.keras.models.Sequential([
+            Dense(units=(scaled_image_dim * scaled_image_dim * filters), input_shape=[self.noise_dimensions]),
+            BatchNormalization(),
+            LeakyReLU(),
+            Reshape(target_shape=(scaled_image_dim, scaled_image_dim, filters)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 2, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 4, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 8, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 16, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 32, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            UpSampling2D(size=(2, 2), interpolation='nearest'),
+            Conv2D(filters=filters // 64, strides=1, kernel_size=kernel_size, padding=padding, use_bias=False),
+            BatchNormalization(),
+            Lambda(lambda x: selu(x)),
+            Conv2D(filters=3, activation='tanh', strides=1, kernel_size=kernel_size, padding=padding, use_bias=False)
         ])
         self.generator.summary()
         pass
@@ -88,6 +195,9 @@ class GAN:
         ])
         self.critic.summary()
         pass
+
+
+
 
     def build_discriminator(self, target_size):
         filters = 64
@@ -282,10 +392,10 @@ class GAN:
                 est_step_time = (time.time() - epoch_start_time)/(step+1)
                 print("Epoch: {0} Step: {1}/{4} || Discriminator loss = {2:.8f} || Generator loss = {3:.8f} || Time/Step = {5:.4f}s || Est. Time/Epoch ={6:.4f}s".format(epoch, (step+1),tf.reduce_sum(total_crit_loss),tf.reduce_sum(total_gen_loss), num_steps, est_step_time, (est_step_time*num_steps)))
                 pass #End of step
-            if epoch%10 == 0:
+            if epoch%1 == 0:
                 self.generate_image()
-                tf.keras.models.save_model(self.generator, f"Models/Epoch{epoch}/Generator.h5")
-                tf.keras.models.save_model(self.critic, f"Models/Epoch{epoch}/Critic.h5")
+                tf.keras.models.save_model(self.generator, f"AutoencoderKS3/Epoch{epoch}/Generator.h5")
+                tf.keras.models.save_model(self.critic, f"AutoencoderKS3/Epoch{epoch}/Critic.h5")
             pass #End of epoch
         pass #End of method
 

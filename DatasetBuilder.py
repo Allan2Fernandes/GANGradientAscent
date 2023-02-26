@@ -20,7 +20,7 @@ class DatasetBuilder:
             subset=None,
             interpolation='bilinear',
             follow_links=False,
-            crop_to_aspect_ratio=False)
+            crop_to_aspect_ratio=True)
 
         self.image_dataset = dataset.map(self.map_dataset).batch(batch_size=batch_size, drop_remainder=True).prefetch(buffer_size=1)
         pass

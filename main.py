@@ -1,8 +1,10 @@
 import tensorflow as tf
 import DatasetBuilder
 import GAN
+import matplotlib.pyplot as plt
 
-dataset_directory_path = "C:/Users/allan/Downloads/GANFacesDateset"
+celeb_dataset_path = "C:/Users/allan/Downloads/CelebA/img_align_celeba/img_align_celeba"
+fake_faces_path = "C:/Users/allan/Downloads/GANFacesDateset"
 batch_size = 64
 target_size = (128,128)
 image_shape = (128,128,3)
@@ -11,8 +13,10 @@ gradient_penalty_weight = 10
 learning_rate = 0.0001
 epochs = 500
 
-dataset_builder = DatasetBuilder.DatasetBuilder(directory_path=dataset_directory_path, batch_size=batch_size, target_size=target_size)
+dataset_builder = DatasetBuilder.DatasetBuilder(directory_path=fake_faces_path, batch_size=batch_size, target_size=target_size)
 dataset = dataset_builder.get_dataset()
+
+
 
 GAN = GAN.GAN(image_shape=image_shape, noise_dimensions=noise_dimensions)
 GAN.initialize_BCE_loss()
